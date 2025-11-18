@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+	<title>Rotating Wheel Responsive</title>
+	<style>
+		body {
+			margin: 0;
+			overflow: hidden;
+			background: #f0f0f0;
+			font-family: Arial, sans-serif;
+		}
+
+		canvas {
+			display: block;
+			background: #ffffff;
+		}
+	</style>
+</head>
+
+<body>
+
+	<canvas id="wheelCanvas"></canvas>
+
+	<script>
+		const canvas = document.getElementById("wheelCanvas");
+		const ctx = canvas.getContext("2d");
+
+		// Funzione per ridimensionare il canvas
+		function resizeCanvas() {
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight;
+		}
+		window.addEventListener('resize', () => {
+			resizeCanvas();
+			updateNodePositions(); // Ricalcola posizioni
+			drawEverything();      // Ridisegna
+		});
+		resizeCanvas();
+
+		// --- CONFIGURAZIONE RUOTA ---
+		// Nota: centerX e centerY saranno calcolati dinamicamente nel draw o update
+		let centerX = canvas.width / 2;
+		let centerY = canvas.height / 2;
+		const radius = 180; // Raggio "base" logico
+
+		// 8 settori = 360 / 8 = 45°
+		const segmentAngle = (Math.PI * 2) / 8;
+		let angle = 0;
+		let isSpinning = false;
+
+		// --- CLASSE NODO ---
+		class Node {
+			constructor(label) {
+				this.label = label;
+				this.x = 0;
+				this.y = 0;
+			}
+
+			draw() {
+				ctx.beginPath();
+				ctx.fillStyle = "#f4d35e";
+				ctx.strokeStyle = "#000";
+				ctx.lineWidth = 2;
+				ctx.arc(this.x, this.y, 50, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.stroke();
+
+				// Testo
+				ctx.fillStyle = "#000";
+				ctx.font = "12px Arial";
+				ctx.textAlign = "center";
+				ctx.textBaseline = "middle";
+
+				const words = this.label.split("\n");
+				words.forEach((w, i) => {
+					ctx.fillText(w, this.x, this.y - 20 + i * 14);
+				});
+			}
+		}
+
+		const orderedNodes = [
+			new Node("A.\nArchitecture\nVision"),
+			new Node("B.\nBusiness\nArchitecture"),
+			new Node("C.\nInformation\nSystems\nArchitectures"),
+			new Node("D.\nTechnology\nArchitecture"),
+			new Node("E.\nOpportunities\nand\nSolutions"),
+			new Node("F.\nMigration\nPlanning"),
+			new Node("G.\nImplementation\nGovernance"),
+			new Node("H.\nArchitecture\nChange\nManagement")
+		];
+
+		const baseAngles = orderedNodes.map((_, i) => i * segmentAngle);
+
+		// --- AGGIORNAMENTO POSIZIONI (LOGICHE) ---
+		function updateNodePositions() {
+			// Aggiorniamo il centro in caso di resize
+			centerX = canvas.width / 2;
+			centerY = canvas.height / 2;
+
+			orderedNodes.forEach((node, i) => {
+				const a = baseAngles[i] + angle;
+				// Qui usiamo le coordinate "assolute" originali (radius 180)
+				// Lo zoom avverrà visivamente nel drawEverything
+				node.x = Math.cos(a) * radius;
+				node.y = Math.sin(a) * radius;
+			});
+		}
+
+		// --- DISEGNO CON ZOOM ---
+		function drawEverything() {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+			ctx.save(); // Salva lo stato del contesto (senza zoom)
+
+			// 2. CALCOLO DELLO ZOOM AUTOMATICO
+			// Definiamo una dimensione "ideale" in cui la ruota sta comoda (es. 500px)
+			// Se lo schermo è più piccolo (mobile), riduciamo lo zoom (o ingrandiamo se serve riempire)
+			// Se vuoi che su mobile sia GRANDE, aumentiamo il rapporto.
+			const minDim = Math.min(canvas.width, canvas.height);
+
+			// Logica: La ruota ha raggio 180, quindi diametro 360 + nodi (50px raggio) = ~460px totali.
+			// Facciamo in modo che il tutto occupi circa l'85% del lato più corto dello schermo.
+			const contentSize = 500;
+			let scaleFactor = (minDim / contentSize) * 0.85;
+
+			// Opzionale: limita lo zoom minimo e massimo per evitare cose troppo piccole o giganti
+			// if (scaleFactor < 0.6) scaleFactor = 0.6; 
+			// if (scaleFactor > 1.5) scaleFactor = 1.5;
+
+			// Applichiamo lo spostamento al centro e lo zoom
+			ctx.translate(centerX, centerY);
+			ctx.scale(scaleFactor, scaleFactor);
+
+			// --- DA QUI IN POI DISEGNAMO TUTTO RISPETTO A (0,0) ---
+			// Poiché abbiamo fatto translate(centerX, centerY), il punto (0,0) è ora il centro dello schermo.
+
+			// Collegamenti esterni
+			ctx.strokeStyle = "#000";
+			ctx.lineWidth = 2;
+			for (let i = 0; i < orderedNodes.length; i++) {
+				const a = orderedNodes[i];
+				const b = orderedNodes[(i + 1) % orderedNodes.length];
+				ctx.beginPath();
+				ctx.moveTo(a.x, a.y);
+				ctx.lineTo(b.x, b.y);
+				ctx.stroke();
+			}
+
+			// Collegamenti centro
+			orderedNodes.forEach(node => {
+				ctx.beginPath();
+				ctx.moveTo(0, 0); // Centro relativo
+				ctx.lineTo(node.x, node.y);
+				ctx.stroke();
+			});
+
+			// Nodo superiore
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(0, - 350);
+			ctx.stroke();
+
+			ctx.beginPath();
+			ctx.fillStyle = "#a3cef1";
+			ctx.arc(0, - 350, 70, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+
+			ctx.fillStyle = "#000";
+			ctx.font = "16px Arial";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText("Preliminary", 0, - 350);
+
+			// Nodo centrale
+			ctx.beginPath();
+			ctx.fillStyle = "#a3cef1";
+			ctx.arc(0, 0, 70, 0, Math.PI * 2); // Disegna a 0,0
+			ctx.fill();
+			ctx.stroke();
+
+			ctx.fillStyle = "#000";
+			ctx.font = "16px Arial";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText("Requirements", 0, -10);
+			ctx.fillText("Management", 0, 10);
+
+			// Nodi esterni
+			orderedNodes.forEach(n => n.draw());
+
+			ctx.restore(); // Ripristina coordinate normali per il prossimo frame
+		}
+
+		// --- ANIMAZIONE ---
+		function spinWheel() {
+			if (isSpinning) return;
+			isSpinning = true;
+
+			const start = angle;
+			const fullSpins = 5;
+			const randomSegments = Math.floor(Math.random() * 8);
+			const rotationDelta = (fullSpins * Math.PI * 2) + (randomSegments * segmentAngle);
+			const end = start + rotationDelta;
+
+			const duration = 3000;
+			const startTime = performance.now();
+
+			function animate(now) {
+				const elapsed = now - startTime;
+				let t = elapsed / duration;
+
+				if (t >= 1) {
+					t = 1;
+					angle = end;
+					isSpinning = false;
+					updateNodePositions();
+					drawEverything();
+					return;
+				}
+
+				const ease = 1 - Math.pow(1 - t, 3);
+				angle = start + (end - start) * ease;
+
+				updateNodePositions();
+				drawEverything();
+				requestAnimationFrame(animate);
+			}
+
+			requestAnimationFrame(animate);
+		}
+
+		canvas.addEventListener("click", spinWheel);
+
+		updateNodePositions();
+		drawEverything();
+	</script>
+
+</body>
+
+</html>
