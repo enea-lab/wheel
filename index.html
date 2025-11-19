@@ -4,13 +4,16 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-	<title>Rotating Wheel Responsive</title>
+	<title>TOGAF Wheel Complete</title>
 	<style>
 		body {
 			margin: 0;
 			overflow: hidden;
+			/* Nasconde le barre di scorrimento */
 			background: #f0f0f0;
 			font-family: Arial, sans-serif;
+			touch-action: none;
+			/* Disabilita lo zoom/scroll tattile nativo per migliorare l'interazione */
 		}
 
 		canvas {
@@ -28,28 +31,28 @@
 		const canvas = document.getElementById("wheelCanvas");
 		const ctx = canvas.getContext("2d");
 
-		// Funzione per ridimensionare il canvas
+		// --- GESTIONE RESIZE ---
 		function resizeCanvas() {
 			canvas.width = window.innerWidth;
 			canvas.height = window.innerHeight;
 		}
+
 		window.addEventListener('resize', () => {
 			resizeCanvas();
-			updateNodePositions(); // Ricalcola posizioni
-			drawEverything();      // Ridisegna
+			updateNodePositions();
+			drawEverything();
 		});
-		resizeCanvas();
+		resizeCanvas(); // Primo avvio
 
-		// --- CONFIGURAZIONE RUOTA ---
-		// Nota: centerX e centerY saranno calcolati dinamicamente nel draw o update
+		// --- CONFIGURAZIONE GLOBALE ---
 		let centerX = canvas.width / 2;
 		let centerY = canvas.height / 2;
-		const radius = 180; // Raggio "base" logico
+		const radius = 180; // Raggio logico della ruota
+		const segmentAngle = (Math.PI * 2) / 8; // 45 gradi per settore
 
-		// 8 settori = 360 / 8 = 45°
-		const segmentAngle = (Math.PI * 2) / 8;
-		let angle = 0;
-		let isSpinning = false;
+		// Angolo iniziale: -90° (-PI/2) per far partire "A" in alto a ore 12
+		let angle = -Math.PI / 2;
+		let isSpinning = false; // Flag per bloccare i click
 
 		// --- CLASSE NODO ---
 		class Node {
@@ -57,30 +60,41 @@
 				this.label = label;
 				this.x = 0;
 				this.y = 0;
+				this.currentScale = 1; // Per l'effetto bump
 			}
 
 			draw() {
+				ctx.save();
+				// Spostiamo l'origine del disegno al centro di QUESTO nodo
+				ctx.translate(this.x, this.y);
+				// Applichiamo lo zoom locale (bump)
+				ctx.scale(this.currentScale, this.currentScale);
+
+				// Disegno cerchio (centrato su 0,0 locale)
 				ctx.beginPath();
 				ctx.fillStyle = "#f4d35e";
 				ctx.strokeStyle = "#000";
 				ctx.lineWidth = 2;
-				ctx.arc(this.x, this.y, 50, 0, Math.PI * 2);
+				ctx.arc(0, 0, 50, 0, Math.PI * 2);
 				ctx.fill();
 				ctx.stroke();
 
 				// Testo
 				ctx.fillStyle = "#000";
-				ctx.font = "12px Arial";
+				ctx.font = "12px Arial"; // Font leggermente più piccolo per mobile
 				ctx.textAlign = "center";
 				ctx.textBaseline = "middle";
 
 				const words = this.label.split("\n");
 				words.forEach((w, i) => {
-					ctx.fillText(w, this.x, this.y - 20 + i * 14);
+					ctx.fillText(w, 0, -20 + i * 14);
 				});
+
+				ctx.restore(); // Ripristina il contesto per il prossimo nodo
 			}
 		}
 
+		// --- DEFINIZIONE NODI ---
 		const orderedNodes = [
 			new Node("A.\nArchitecture\nVision"),
 			new Node("B.\nBusiness\nArchitecture"),
@@ -94,50 +108,35 @@
 
 		const baseAngles = orderedNodes.map((_, i) => i * segmentAngle);
 
-		// --- AGGIORNAMENTO POSIZIONI (LOGICHE) ---
+		// --- CALCOLO POSIZIONI ---
 		function updateNodePositions() {
-			// Aggiorniamo il centro in caso di resize
 			centerX = canvas.width / 2;
 			centerY = canvas.height / 2;
 
 			orderedNodes.forEach((node, i) => {
 				const a = baseAngles[i] + angle;
-				// Qui usiamo le coordinate "assolute" originali (radius 180)
-				// Lo zoom avverrà visivamente nel drawEverything
 				node.x = Math.cos(a) * radius;
 				node.y = Math.sin(a) * radius;
 			});
 		}
 
-		// --- DISEGNO CON ZOOM ---
+		// --- DISEGNO GENERALE ---
 		function drawEverything() {
 			ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-			ctx.save(); // Salva lo stato del contesto (senza zoom)
+			ctx.save(); // Salva stato iniziale (senza zoom globale)
 
-			// 2. CALCOLO DELLO ZOOM AUTOMATICO
-			// Definiamo una dimensione "ideale" in cui la ruota sta comoda (es. 500px)
-			// Se lo schermo è più piccolo (mobile), riduciamo lo zoom (o ingrandiamo se serve riempire)
-			// Se vuoi che su mobile sia GRANDE, aumentiamo il rapporto.
+			// 1. ZOOM RESPONSIVE
 			const minDim = Math.min(canvas.width, canvas.height);
-
-			// Logica: La ruota ha raggio 180, quindi diametro 360 + nodi (50px raggio) = ~460px totali.
-			// Facciamo in modo che il tutto occupi circa l'85% del lato più corto dello schermo.
-			const contentSize = 500;
+			const contentSize = 500; // Dimensione logica desiderata
+			// Scala al 85% della dimensione minima dello schermo
 			let scaleFactor = (minDim / contentSize) * 0.85;
 
-			// Opzionale: limita lo zoom minimo e massimo per evitare cose troppo piccole o giganti
-			// if (scaleFactor < 0.6) scaleFactor = 0.6; 
-			// if (scaleFactor > 1.5) scaleFactor = 1.5;
-
-			// Applichiamo lo spostamento al centro e lo zoom
+			// Sposta al centro dello schermo e applica zoom
 			ctx.translate(centerX, centerY);
 			ctx.scale(scaleFactor, scaleFactor);
 
-			// --- DA QUI IN POI DISEGNAMO TUTTO RISPETTO A (0,0) ---
-			// Poiché abbiamo fatto translate(centerX, centerY), il punto (0,0) è ora il centro dello schermo.
-
-			// Collegamenti esterni
+			// 2. LINEE ESTERNE (OTTAGONO)
 			ctx.strokeStyle = "#000";
 			ctx.lineWidth = 2;
 			for (let i = 0; i < orderedNodes.length; i++) {
@@ -149,23 +148,24 @@
 				ctx.stroke();
 			}
 
-			// Collegamenti centro
+			// 3. RAGGI VERSO IL CENTRO
 			orderedNodes.forEach(node => {
 				ctx.beginPath();
-				ctx.moveTo(0, 0); // Centro relativo
+				ctx.moveTo(0, 0); // 0,0 è il centro grazie al translate
 				ctx.lineTo(node.x, node.y);
 				ctx.stroke();
 			});
 
-			// Nodo superiore
+			// 4. NODO "PRELIMINARY" (FISSO IN ALTO)
+			// Posizionato a y = -350 (sopra la ruota)
 			ctx.beginPath();
 			ctx.moveTo(0, 0);
-			ctx.lineTo(0, - 350);
+			ctx.lineTo(0, -350);
 			ctx.stroke();
 
 			ctx.beginPath();
 			ctx.fillStyle = "#a3cef1";
-			ctx.arc(0, - 350, 70, 0, Math.PI * 2);
+			ctx.arc(0, -350, 70, 0, Math.PI * 2);
 			ctx.fill();
 			ctx.stroke();
 
@@ -173,12 +173,12 @@
 			ctx.font = "16px Arial";
 			ctx.textAlign = "center";
 			ctx.textBaseline = "middle";
-			ctx.fillText("Preliminary", 0, - 350);
+			ctx.fillText("Preliminary", 0, -350);
 
-			// Nodo centrale
+			// 5. MOZZO CENTRALE ("REQUIREMENTS")
 			ctx.beginPath();
 			ctx.fillStyle = "#a3cef1";
-			ctx.arc(0, 0, 70, 0, Math.PI * 2); // Disegna a 0,0
+			ctx.arc(0, 0, 70, 0, Math.PI * 2);
 			ctx.fill();
 			ctx.stroke();
 
@@ -189,39 +189,82 @@
 			ctx.fillText("Requirements", 0, -10);
 			ctx.fillText("Management", 0, 10);
 
-			// Nodi esterni
+			// 6. DISEGNO NODI RUOTANTI
 			orderedNodes.forEach(n => n.draw());
 
-			ctx.restore(); // Ripristina coordinate normali per il prossimo frame
+			ctx.restore(); // Ripristina coordinate schermo intero
 		}
 
-		// --- ANIMAZIONE ---
+		// --- ANIMAZIONE 2: EFFETTO BUMP (RIMBALZO) ---
+		// Viene chiamata SOLO quando la rotazione è finita
+		function triggerBumpEffect(targetNode, onComplete) {
+			const bumpDuration = 600; // ms
+			const bumpStart = performance.now();
+
+			function animateBump(now) {
+				const elapsed = now - bumpStart;
+				let t = elapsed / bumpDuration;
+
+				if (t >= 1) {
+					targetNode.currentScale = 1; // Reset finale
+					drawEverything();
+					if (onComplete) onComplete(); // Sblocca il click
+					return;
+				}
+
+				// Effetto onda sinusoidale: 1 -> 1.3 -> 1
+				const scaleAmount = 0.3;
+				targetNode.currentScale = 1 + Math.sin(t * Math.PI) * scaleAmount;
+
+				drawEverything();
+				requestAnimationFrame(animateBump);
+			}
+			requestAnimationFrame(animateBump);
+		}
+
+		// --- ANIMAZIONE 1: ROTAZIONE ---
 		function spinWheel() {
-			if (isSpinning) return;
+			if (isSpinning) return; // Se sta già facendo qualcosa, ignora il click
 			isSpinning = true;
 
 			const start = angle;
-			const fullSpins = 5;
-			const randomSegments = Math.floor(Math.random() * 8);
+			const fullSpins = 5; // Giri veloci
+			const randomSegments = Math.floor(Math.random() * 8); // Spicchi extra casuali
+
+			// Calcolo angolo finale (sempre additivo per senso orario)
 			const rotationDelta = (fullSpins * Math.PI * 2) + (randomSegments * segmentAngle);
 			const end = start + rotationDelta;
 
-			const duration = 3000;
+			const duration = 3000; // 3 secondi di rotazione
 			const startTime = performance.now();
 
 			function animate(now) {
 				const elapsed = now - startTime;
 				let t = elapsed / duration;
 
+				// Fine della rotazione
 				if (t >= 1) {
 					t = 1;
 					angle = end;
-					isSpinning = false;
 					updateNodePositions();
-					drawEverything();
-					return;
+
+					// 1. Calcola chi è il "vincitore" (chi sta più in alto visivamente)
+					// Nota: In canvas Y cresce verso il basso, quindi Y minore = più in alto
+					let winnerNode = orderedNodes[0];
+					orderedNodes.forEach(n => {
+						if (n.y < winnerNode.y) winnerNode = n;
+					});
+
+					// 2. Avvia il Bump sul vincitore
+					// Passiamo la callback per sbloccare isSpinning alla fine del bump
+					triggerBumpEffect(winnerNode, () => {
+						isSpinning = false;
+					});
+
+					return; // Stop questo loop
 				}
 
+				// Easing Cubic Out (veloce -> lento)
 				const ease = 1 - Math.pow(1 - t, 3);
 				angle = start + (end - start) * ease;
 
@@ -233,12 +276,14 @@
 			requestAnimationFrame(animate);
 		}
 
+		// Event Listener
 		canvas.addEventListener("click", spinWheel);
 
+		// Avvio iniziale
 		updateNodePositions();
 		drawEverything();
-	</script>
 
+	</script>
 </body>
 
 </html>
